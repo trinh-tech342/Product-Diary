@@ -2,19 +2,22 @@
 <html lang="vi">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sơ đồ Tiến trình Sản phẩm</title>
+    <title>Tra cứu Tiến độ Sản phẩm</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
     <div class="container">
-        <h1>Theo dõi Tiến độ Sản phẩm</h1>
+        <h1>Tra cứu Quy trình Sản phẩm</h1>
         
+        <div class="search-box">
+            <input type="text" id="searchInput" placeholder="Nhập tên vật liệu hoặc số lô...">
+            <button onclick="searchData()">Tìm kiếm</button>
+        </div>
+
         <div id="timeline" class="timeline">
-            <p class="loading">Đang tải dữ liệu...</p>
+            <p class="loading">Nhập thông tin để tra cứu kết quả.</p>
         </div>
     </div>
-
     <script src="script.js"></script>
 </body>
 </html>

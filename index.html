@@ -2,20 +2,35 @@
 <html lang="vi">
 <head>
     <meta charset="UTF-8">
-    <title>Tra cứu Tiến độ Sản phẩm</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hệ Thống Truy Xuất Nguồn Gốc</title>
     <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
 </head>
 <body>
     <div class="container">
-        <h1>Tra cứu Quy trình Sản phẩm</h1>
-        
-        <div class="search-box">
-            <input type="text" id="searchInput" placeholder="Nhập tên vật liệu hoặc số lô...">
-            <button onclick="searchData()">Tìm kiếm</button>
+        <header>
+            <h1><i class="fas fa-boxes"></i> TRUY XUẤT QUY TRÌNH SẢN PHẨM</h1>
+            <div class="action-bar">
+                <a href="https://docs.google.com/spreadsheets/d/1Ssl9LECSCDb82qUb7iIEU67XDtOsIeGBEXytLelidtSZCMgLKqcsRBUp1ZEMGOLccOz3kOB4KT65xq/edit" target="_blank" class="btn-sheet">
+                    <i class="fab fa-google-drive"></i> Mở Google Sheet
+                </a>
+            </div>
+        </header>
+
+        <div class="search-area">
+            <div class="search-box">
+                <input type="text" id="searchInput" placeholder="Nhập tên vật liệu hoặc số lô sản xuất...">
+                <button onclick="searchData()"><i class="fas fa-search"></i> Tìm kiếm</button>
+            </div>
         </div>
 
-        <div id="timeline" class="timeline">
-            <p class="loading">Nhập thông tin để tra cứu kết quả.</p>
+        <div id="result-meta" class="result-meta"></div>
+        <div id="timeline" class="timeline-container">
+            <div class="empty-state">
+                <i class="fas fa-search-location"></i>
+                <p>Nhập thông tin để bắt đầu tra cứu dữ liệu thời gian thực</p>
+            </div>
         </div>
     </div>
     <script src="script.js"></script>

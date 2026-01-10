@@ -1,118 +1,98 @@
-const SHEET_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSsl9LECSCDb82qUb7iIEU67XDtOsIeGBEXytLelidtSZCMgLKqcsRBUp1ZEMGOLccOz3kOB4KT65xq/pub?output=csv';
-
+// Thay các link dưới đây bằng link CSV tương ứng từ 3 sheet của bạn
+const URL_THU_MUA = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSsl9LECSCDb82qUb7iIEU67XDtOsIeGBEXytLelidtSZCMgLKqcsRBUp1ZEMGOLccOz3kOB4KT65xq/pub?gid=0&single=true&output=csv';
+const URL_SAN_XUAT = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSsl9LECSCDb82qUb7iIEU67XDtOsIeGBEXytLelidtSZCMgLKqcsRBUp1ZEMGOLccOz3kOB4KT65xq/pub?gid=457318854&single=true&output=csv';
+const URL_LOT_INFO = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSsl9LECSCDb82qUb7iIEU67XDtOsIeGBEXytLelidtSZCMgLKqcsRBUp1ZEMGOLccOz3kOB4KT65xq/pub?gid=472003237&single=true&output=csv';
 /**
- * Hàm tìm kiếm dữ liệu từ Google Sheets
+ * Hàm hỗ trợ tải và chuyển đổi CSV sang Array
  */
+async function fetchCSV(url) {
+    const response = await fetch(url);
+    const data = await response.text();
+    return data.split(/\r?\n/).map(row => 
+        row.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/).map(cell => cell.replace(/"/g, '').trim())
+    );
+}
+
 async function searchData() {
     const keyword = document.getElementById('searchInput').value.trim().toLowerCase();
     const container = document.getElementById('timeline');
     
     if (!keyword) {
-        alert("Vui lòng nhập mã lô hoặc tên vật liệu!");
+        alert("Vui lòng nhập số lô sản xuất (VD: C010225)!");
         return;
     }
 
-    // Hiển thị trạng thái đang tải
-    container.innerHTML = `
-        <div class="empty-state">
-            <i class="fas fa-spinner fa-spin"></i>
-            <p>Đang truy xuất toàn bộ dữ liệu liên quan...</p>
-        </div>`;
+    container.innerHTML = '<div class="empty-state"><i class="fas fa-spinner fa-spin"></i><p>Đang kết nối dữ liệu...</p></div>';
 
     try {
-        const response = await fetch(SHEET_CSV_URL);
-        const data = await response.text();
-        
-        // Chuyển đổi CSV thành mảng (xử lý cả trường hợp dữ liệu có dấu phẩy bên trong ngoặc kép)
-        const rows = data.split(/\r?\n/).map(row => 
-            row.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/)
-        );
+        // Tải đồng thời dữ liệu từ 3 nguồn
+        const [rowsThuMua, rowsSanXuat, rowsLotInfo] = await Promise.all([
+            fetchCSV(URL_THU_MUA),
+            fetchCSV(URL_SAN_XUAT),
+            fetchCSV(URL_LOT_INFO)
+        ]);
 
-        // Lọc TẤT CẢ các dòng khớp với từ khóa (Số lô thường sẽ khớp nhiều dòng nguyên liệu)
-        const allMatches = rows.filter((col, index) => {
-            if (index === 0) return false; // Bỏ qua tiêu đề
-            return col.some(cell => cell.toLowerCase().includes(keyword));
-        });
+        // 1. Tìm thông tin Lô hàng (Giai đoạn 3)
+        const lotData = rowsLotInfo.find(row => row[0] && row[0].toLowerCase() === keyword);
 
-        if (allMatches.length > 0) {
-            renderMultiTimeline(allMatches);
-        } else {
-            container.innerHTML = `
-                <div class="empty-state">
-                    <i class="fas fa-search-minus"></i>
-                    <p>Không tìm thấy dữ liệu nào khớp với từ khóa: <b>${keyword}</b></p>
-                </div>`;
+        // 2. Tìm thông tin Sản xuất (Giai đoạn 2)
+        const prodMatches = rowsSanXuat.filter(row => row[0] && row[0].toLowerCase() === keyword);
+
+        // 3. Tìm nguyên liệu thu mua (Giai đoạn 1) - Khớp theo lot_no ở cột cuối (index 6)
+        const materialMatches = rowsThuMua.filter(row => row[6] && row[6].toLowerCase() === keyword);
+
+        if (!lotData && prodMatches.length === 0 && materialMatches.length === 0) {
+            container.innerHTML = `<div class="empty-state"><i class="fas fa-search-minus"></i><p>Không tìm thấy số lô: <b>${keyword}</b></p></div>`;
+            return;
         }
+
+        renderTraceability(materialMatches, prodMatches, lotData);
+
     } catch (error) {
         console.error(error);
-        container.innerHTML = '<div class="empty-state">Lỗi kết nối dữ liệu. Vui lòng kiểm tra lại đường dẫn Sheet.</div>';
+        container.innerHTML = '<div class="empty-state">Lỗi kết nối dữ liệu. Hãy kiểm tra lại link Publish của các Sheet.</div>';
     }
 }
 
-/**
- * Hàm hiển thị giao diện Gộp nhiều dòng dữ liệu
- */
-function renderMultiTimeline(matches) {
+function renderTraceability(materials, production, lot) {
     const container = document.getElementById('timeline');
-    container.innerHTML = ''; 
+    
+    // Xử lý HTML danh sách nguyên liệu 
+    let matHtml = materials.map(m => `
+        <div class="material-item">
+            <i class="fas fa-check-circle"></i>
+            <div class="mat-info">
+                <span class="mat-name">${m[1]} (Số lượng: ${m[3]} ${m[4]})</span>
+                <span class="mat-detail">Ngày nhập: ${m[0]} — NCC: ${m[2]}</span>
+            </div>
+        </div>`).join('') || '<p>Không có dữ liệu thu mua riêng cho lô này.</p>';
 
-    // Lấy thông tin chung từ dòng đầu tiên tìm được (Dành cho thông tin Sản xuất & Kho)
-    const firstMatch = matches[0].map(c => c.replace(/"/g, '').trim());
+    // Lấy thông tin sản xuất đầu tiên để làm header 
+    const p = production[0] || [];
 
-    // 1. Xử lý danh sách NGUYÊN LIỆU (Duyệt qua tất cả dòng tìm được)
-    let nvlHtml = '';
-    matches.forEach(row => {
-        const col = row.map(c => c.replace(/"/g, '').trim());
-        // Chỉ thêm vào danh sách nếu có tên vật liệu (cột index 1)
-        if (col[1]) {
-            nvlHtml += `
-                <div class="material-item">
-                    <i class="fas fa-check-circle"></i>
-                    <div class="mat-info">
-                        <span class="mat-name">${col[1]}</span>
-                        <span class="mat-detail">${col[3]} ${col[4]} — NCC: ${col[2]}</span>
-                    </div>
-                </div>`;
-        }
-    });
-
-    // 2. Render giao diện tổng thể theo 3 giai đoạn
     container.innerHTML = `
         <div class="step-card">
-            <div class="step-header">
-                <i class="fas fa-shopping-cart"></i> Giai đoạn 1: Thu mua Vật tư
-            </div>
-            <p style="font-size: 13px; color: #666; margin-bottom: 10px;">Danh sách nguyên liệu cấu thành:</p>
-            <div class="materials-list">
-                ${nvlHtml}
-            </div>
-            <div class="info-grid" style="margin-top:15px; border-top:1px solid #eee; padding-top:10px;">
-                 <div class="info-item"><b>Ngày nhập sớm nhất</b><span>${firstMatch[0]}</span></div>
-                 <div class="info-item"><b>Mục đích sử dụng</b><span>${firstMatch[5]}</span></div>
+            <div class="step-header"><i class="fas fa-shopping-cart"></i> Giai đoạn 1: Thu mua Vật tư</div>
+            <div class="materials-list">${matHtml}</div>
+        </div>
+
+        <div class="step-card">
+            <div class="step-header"><i class="fas fa-industry"></i> Giai đoạn 2: Sản xuất & Chế biến</div>
+            <div class="info-grid">
+                <div class="info-item"><b>Công thức</b><span>${p[8] || '---'}</span></div>
+                <div class="info-item"><b>Nhiệt độ/Máy</b><span>${p[3] || '---'}</span></div>
+                <div class="info-item"><b>Ngày bắt đầu</b><span>${p[5] || '---'} lúc ${p[4] || ''}</span></div>
+                <div class="info-item"><b>Ngày kết thúc</b><span>${p[7] || '---'} lúc ${p[6] || ''}</span></div>
             </div>
         </div>
 
         <div class="step-card">
-            <div class="step-header">
-                <i class="fas fa-industry"></i> Giai đoạn 2: Sản xuất & Chế biến
-            </div>
+            <div class="step-header"><i class="fas fa-warehouse"></i> Giai đoạn 3: Thành phẩm & Xuất kho</div>
             <div class="info-grid">
-                <div class="info-item"><b>Công thức</b><span>${firstMatch[6]}</span></div>
-                <div class="info-item"><b>Thiết bị/Máy</b><span>${firstMatch[8]}</span></div>
-                <div class="info-item"><b>Sản lượng dự kiến</b><span>${firstMatch[7]}</span></div>
-                <div class="info-item"><b>Thời gian vận hành</b><span>${firstMatch[11]} ${firstMatch[10]} <i class="fas fa-long-arrow-alt-right"></i> ${firstMatch[13]} ${firstMatch[12]}</span></div>
-            </div>
-        </div>
-
-        <div class="step-card">
-            <div class="step-header">
-                <i class="fas fa-warehouse"></i> Giai đoạn 3: Thành phẩm & Xuất kho
-            </div>
-            <div class="info-grid">
-                <div class="info-item"><b>Số Lô (Batch No.)</b><span class="highlight-text">${firstMatch[14]}</span></div>
-                <div class="info-item"><b>Tổng nhập kho</b><span>${firstMatch[15]}</span></div>
-                <div class="info-item"><b>Hạn sử dụng</b><span>${firstMatch[16]}</span></div>
-                <div class="info-item"><b>Khách hàng</b><span>${firstMatch[17]}</span></div>
+                <div class="info-item"><b>Số Lô (Batch No.)</b><span class="highlight-text">${lot ? lot[0] : '---'}</span></div>
+                <div class="info-item"><b>Tổng sản lượng</b><span>${lot ? lot[1] : '---'}</span></div>
+                <div class="info-item"><b>Hạn sử dụng</b><span>${lot ? lot[2] : '---'}</span></div>
+                <div class="info-item"><b>Khách hàng</b><span>${lot ? lot[3] : '---'}</span></div>
             </div>
         </div>
     `;
